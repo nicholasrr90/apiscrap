@@ -1,5 +1,6 @@
 {
-  "titulo": 664,
-  "scrap": 664,
-  "autor": 664
+  "/titulo": {
+    "GET": true,
+    "POST": true
+  }
 }
