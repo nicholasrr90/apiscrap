@@ -1,8 +1,9 @@
 name: Send PR Event to Salesforce
 
 on:
-  pull_request:
-    types: [opened]
+  push:
+    branches:
+      - "**"
 
 jobs:
   notify-salesforce:
