@@ -1,36 +1,39 @@
-# This is a basic workflow to help you get started with Actions
+name: Send PR Event to Salesforce
 
-name: CI
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "master" branch
-  push:
-    branches: [ "master" ]
   pull_request:
-    branches: [ "master" ]
+    types: [opened]
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  notify-salesforce:
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: Get Salesforce Token
+        id: auth
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          RESPONSE=$(curl -s https://test.salesforce.com/services/oauth2/token \
+            -d "grant_type=password" \
+            -d "client_id=${{ secrets.SF_CLIENT_ID }}" \
+            -d "client_secret=${{ secrets.SF_CLIENT_SECRET }}" \
+            -d "username=${{ secrets.SF_USERNAME }}" \
+            -d "password=${{ secrets.SF_PASSWORD }}${{ secrets.SF_SECURITY_TOKEN }}")
+
+          ACCESS_TOKEN=$(echo $RESPONSE | jq -r '.access_token')
+          INSTANCE_URL=$(echo $RESPONSE | jq -r '.instance_url')
+
+          echo "ACCESS_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
+          echo "INSTANCE_URL=$INSTANCE_URL" >> $GITHUB_ENV
+
+      - name: Send Platform Event
+        run: |
+          curl -X POST "$INSTANCE_URL/services/data/v60.0/sobjects/Git_Merge_Request_Event__e" \
+          -H "Authorization: Bearer $ACCESS_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "GIT_Repository__c": "${{ github.repository }}",
+            "GIT_Branch__c": "${{ github.event.pull_request.head.ref }}",
+            "GIT_Commit_Id__c": "${{ github.event.pull_request.head.sha }}",
+            "GIT_Author__c": "${{ github.actor }}"
+          }'
